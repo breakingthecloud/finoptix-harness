@@ -1,0 +1,75 @@
+# FinOptix Harness — agent-config-spec v1
+# Steering declarativo: routing L1-L6 (classifier) + budget (sayay) + tracing (qhaway)
+version: 1
+agent:
+  name: finoptix-harness
+  description: FinOptix FinOps AI harness — SSTTQ deployment over FinOptix models
+
+models:
+  default: finoptix-14b
+  routing_table:
+    L1: finemma-4b
+    L2: finoptix-7b
+    L3: finoptix-14b
+    L4: finoptix-32b
+    L5: finomotrix-49b
+    L6: finomotrix-49b
+  mode_overrides:
+    terraform:
+      L1: finocode-7b
+      L2: finocode-7b
+      L3: finocode-7b
+    code_gen:
+      all: finocode-7b
+  fallback_chain: [finoptix-14b, finoptix-7b, claude-haiku, claude-sonnet]
+
+budget:
+  provider: sayay-guard
+  daily_cap_usd:
+    free: 0.50
+    pro: 2.00
+    enterprise: unlimited
+  on_exceeded: degrade
+  degrade_threshold_pct: 80
+  warn_threshold_pct: 60
+
+routing:
+  provider: styrr-llm
+  classifier: finoptix-classifier
+  strategy: fallback
+  tier_gate:
+    L5: enterprise
+    L6: any        # hybrid: any tier via chained inference
+
+guardrails:
+  prompt_injection: warn
+  pii_detection: log
+  loop_detection:
+    max_iterations: 8
+
+tracing:
+  provider: qhaway
+  capture: [model, latency, tokens, cost_usd, user_rating]
+  export: otel
+  feedback_loop: [thumbs_up, thumbs_down]
+
+tools:
+  - byaml-mcp          # 9+ AWS FinOps tools (PyPI byaml-mcp)
+  - tiderag            # search_knowledge (context)
+  - user_custom_mcp    # BYOM (enterprise)
+
+skills:
+  - cost_analysis
+  - terraform_audit
+  - byaml_governance
+  - anomaly_detection
+  - remediation_plan
+
+extensions:
+  harness:
+    agent_framework: tinkuy-agent
+    entrypoints:
+      - agents.finoptix.dev/mcp
+      - api.finoptix.dev/v1/chat
+    domains:
+      finoptix-ai: [ai.finoptix.dev]
