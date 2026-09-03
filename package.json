@@ -7,19 +7,28 @@
     "classify": "tsx src/cli/classify.ts",
     "demo": "tsx src/cli/demo.ts",
     "build": "tsc",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-cloudwatch": "^3.1125.0",
+    "@aws-sdk/client-dynamodb": "^3.1125.0",
+    "@aws-sdk/lib-dynamodb": "^3.1125.0",
     "@carloscortezcloud/qhaway": "^0.12.3",
     "@carloscortezcloud/sayay-guard": "^0.3.0",
     "@carloscortezcloud/styrr-llm": "^0.6.0",
     "@carloscortezcloud/tiderag": "^0.1.0",
-    "@carloscortezcloud/tinkuy-agent": "^0.8.0"
+    "@carloscortezcloud/tinkuy-agent": "^0.8.0",
+    "hono": "^4.6.0"
   },
   "devDependencies": {
-    "@types/node": "^22.20.1",
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "wrangler": "^4.10.0"
   }
 }
