@@ -25,9 +25,11 @@ import {
   validateApiKey,
   issueApiKey,
   sha256,
+  D1MemoryStorage,
   type D1Database,
   type KVNamespace,
 } from './db.js';
+import { memoryTools } from '../src/memory.js';
 
 type Env = {
   OPENROUTER_API_KEY: string;
@@ -49,7 +51,7 @@ function makeObs(db: D1Database) {
 }
 
 function makeAgent(kind: 'analyst' | 'auditor' | 'investigator', apiKey: string, db: D1Database) {
-  const common = { openrouterApiKey: apiKey, obs: makeObs(db) };
+  const common = { openrouterApiKey: apiKey, obs: makeObs(db), memory: new D1MemoryStorage(db) };
   switch (kind) {
     case 'auditor':
       return createArchAuditor(common);
@@ -269,7 +271,7 @@ app.post('/v1/finops/analyze', async (c) => {
   if (!(await validateKey(c.env.API_KEYS, key))) return authError();
 
   const { prompt, context, mode } = await c.req.json<{ prompt: string; context?: string; mode?: string }>();
-  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY, obs: makeObs(c.env.DB) });
+  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY, obs: makeObs(c.env.DB), memory: new D1MemoryStorage(c.env.DB) });
   const fullPrompt = context ? `${context}\n\n${prompt}` : prompt;
   const out = await agent.run(fullPrompt);
   const cls = classify({ prompt, context: context ?? '', mode: mode as never });
@@ -326,6 +328,20 @@ app.get('/v1/finops/stats', async (c) => {
   if (!(await validateKey(c.env.API_KEYS, key))) return authError();
   const stats = await getStats(c.env.DB);
   return c.json(stats);
+});
+
+// ─── Memory (sqlite-memory-mcp contract, D1-backed) ─────────────────────
+
+app.post('/v1/memory', async (c) => {
+  const key = getKey(c);
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
+  const mem = new D1MemoryStorage(c.env.DB);
+  const { action, args } = await c.req.json<{ action: string; args: Record<string, unknown> }>();
+  const tools = memoryTools(mem);
+  const tool = tools.find((t) => t.name === `memory/${action}`);
+  if (!tool) return c.json({ error: `Unknown memory action: ${action}. Options: remember, search, recent` }, 400);
+  const result = await tool.execute(args);
+  return c.json({ ok: true, action, result });
 });
 
 // ─── API keys (KV, free tier) ───────────────────────────────────────────

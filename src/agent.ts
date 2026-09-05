@@ -13,9 +13,10 @@
 
 import { Agent, defineTool, type Tool, type AgentConfig } from '@carloscortezcloud/tinkuy-agent';
 import { StyrRouter } from '@carloscortezcloud/styrr-llm';
-import { SayayGuard, MemoryStorage } from '@carloscortezcloud/sayay-guard';
+import { SayayGuard, MemoryStorage as SayayMemoryStorage } from '@carloscortezcloud/sayay-guard';
 import { classify } from './classifier.js';
 import { defaultModelList } from './providers.js';
+import { memoryTools, type MemoryStorage as FinoptixMemoryStorage } from './memory.js';
 
 // ─── Tool: Cost summary ──────────────────────────────────────────────────
 
@@ -148,6 +149,8 @@ export interface FinopsAnalystConfig {
   obs?: {
     attach: (config: AgentConfig) => AgentConfig;
   };
+  /** optional memory storage (sqlite-memory-mcp contract) — adds memory/* tools */
+  memory?: FinoptixMemoryStorage;
 }
 
 const DEFAULT_MODELS = defaultModelList();
@@ -170,7 +173,7 @@ export function createFinopsAnalyst(cfg: FinopsAnalystConfig) {
   });
 
   const guard = new SayayGuard({
-    storage: new MemoryStorage(),
+    storage: new SayayMemoryStorage(),
     budget: { dailyUsd: cfg.dailyBudgetUsd ?? 1.0 },
     onExceeded: 'warn',
   });
@@ -180,16 +183,19 @@ export function createFinopsAnalyst(cfg: FinopsAnalystConfig) {
     awsProfile: cfg.awsProfile,
   };
 
-  const tools: Tool[] = [costSummary, blastRadius, remediationPlan].map((t) => ({
-    ...t,
-    execute: async (args) => {
-      try {
-        return await t.execute({ ...args, ...toolCtx });
-      } catch (err) {
-        return { error: String(err) };
-      }
-    },
-  }));
+  const tools: Tool[] = [
+    ...(cfg.memory ? memoryTools(cfg.memory) : []),
+    ...[costSummary, blastRadius, remediationPlan].map((t) => ({
+      ...t,
+      execute: async (args: Record<string, unknown>) => {
+        try {
+          return await t.execute({ ...args, ...toolCtx });
+        } catch (err) {
+          return { error: String(err) };
+        }
+      },
+    })),
+  ];
 
   return new Agent(
     cfg.obs

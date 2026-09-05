@@ -15,6 +15,7 @@ This is the source of truth for the FinOptix harness section on [ai.finoptix.dev
 | **Budget** | Sayay (`sayay-guard`) | allow/warn/degrade/block per tier + credit system |
 | **Observability** | Qhaway (`qhaway`) | Every decision traced (model, latency, tokens, cost) + feedback loop |
 | **Context** | TideRAG (`tiderag`) | Knowledge base of architectures/docs (namespace-scoped) |
+| **Memory** | Memory Layer (`memory/*` tools) | sqlite-memory-mcp contract, tiered (HOT/WARM/COLD/ARCH) |
 | **Tools** | byaml-mcp | 9+ real AWS FinOps tools (cost, idle, tags, architecture) |
 | **Steering config** | agent-config-spec | Declarative `agent-config.yaml` (routing, budget, guardrails, tracing) |
 
@@ -46,6 +47,26 @@ The **only domain-specific code** in the harness. Routes by complexity:
 | L4 Complex | "Full architecture review" | finoptix-32b |
 | L5 Enterprise | "Compare 5 accounts + migration" | finomotrix-49b |
 | L6 Hybrid | L5 with budget constraints (any tier) | chained inference |
+
+## Memory (Memory Has Tiers)
+
+The harness embeds the [sqlite-memory-mcp](https://github.com/breakingthecloud/sqlite-memory-mcp) contract (same 14-tool API, same schema) as **native agent tools** — so the agent can *remember*, *search*, and *recall* knowledge across sessions, live with the harness.
+
+| Tier | Tool | Cost | Use |
+|------|------|------|-----|
+| 🔴 HOT | `memory/recent` | ~500 tok | "What did we discuss?" |
+| 🟡 WARM | `compact_graph` | ~12K tok | General context |
+| 🔵 COLD | `memory/search` | ~1-3K tok | "What about payment-service?" |
+| ⚪ ARCH | `archive_old` | 0 tok | Retention, still searchable |
+
+- **Tool API:** `memory/remember`, `memory/search`, `memory/recent` (same contract as the MCP server)
+- **Storage pluggable:** D1 in the cloud Worker (persistent, free tier) / in-memory locally (tests/dev)
+- **Principle (Tokenfesto):** never bulk-load everything — tier it like S3 storage classes
+- Same contract as your local `sqlite-memory-mcp` MCP server → the harness cloud memory and your IDE memory share the same mental model
+
+### How the local MCP server connects
+
+Your IDE (opencode/Kiro) runs `sqlite-memory-mcp` as a **local MCP server** (`memory` in mcp config) backed by `.kiro/memory.db`. The **harness cloud** exposes the *same tools* (`memory/remember`, `memory/search`, `memory/recent`) backed by D1. Both follow the same contract — local for your agent's working memory, cloud for the FinOptix product's memory.
 
 ## Cost
 

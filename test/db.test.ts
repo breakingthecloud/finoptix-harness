@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { initSchema, validateApiKey, issueApiKey, sha256, getStats, writeRating } from '../worker/db.js';
+import { initSchema, validateApiKey, issueApiKey, sha256, getStats, writeRating, D1MemoryStorage, MEMORY_SCHEMA } from '../worker/db.js';
 import { MIGRATION_SQL } from '@carloscortezcloud/qhaway';
 
 // ─── mock D1 ─────────────────────────────────────────────────────────────
@@ -62,8 +62,89 @@ describe('worker/db (Bloque 5 — D1 + KV free tier)', () => {
     expect(sqls.length).toBeGreaterThanOrEqual(4);
     expect(sqls.some((s) => s.includes('CREATE TABLE IF NOT EXISTS qhaway_spans'))).toBe(true);
     expect(sqls.some((s) => s.includes('CREATE INDEX'))).toBe(true);
+    // memory schema included
+    expect(sqls.some((s) => s.includes('memory_entities'))).toBe(true);
+    expect(sqls.some((s) => s.includes('memory_observations'))).toBe(true);
     // no ALTER (legacy, rating column exists)
     expect(sqls.some((s) => s.startsWith('ALTER'))).toBe(false);
+  });
+
+  it('MEMORY_SCHEMA defines entities + observations tables', () => {
+    expect(MEMORY_SCHEMA).toContain('CREATE TABLE IF NOT EXISTS memory_entities');
+    expect(MEMORY_SCHEMA).toContain('CREATE TABLE IF NOT EXISTS memory_observations');
+    expect(MEMORY_SCHEMA).toContain('REFERENCES memory_entities');
+  });
+
+  it('D1MemoryStorage contract works with a simple mock', async () => {
+    // minimal D1 mock: remembers inserts per table, returns for selects
+    const store: Record<string, Record<string, string[]>> = {};
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        const isInsert = sql.includes('INSERT INTO memory_observations');
+        const isEntityInsert = sql.includes('INSERT OR IGNORE INTO memory_entities');
+        const isEntitySelect = sql.includes('SELECT entity_type FROM memory_entities');
+        const isObsSelect = sql.includes('SELECT content FROM memory_observations');
+        const isCount = sql.includes('SELECT (SELECT COUNT(*)');
+        const bound = {
+          run: vi.fn(async () => {
+            if (isEntityInsert) { /* no-op */ }
+            return { meta: { changes: 1 } };
+          }),
+          all: vi.fn(async () => {
+            if (isEntitySelect) {
+              const name = (bound as never as { params: unknown[] }).params?.[0] as string;
+              return { results: store[name] ? [{ entity_type: 'project' }] : [] };
+            }
+            if (isObsSelect) {
+              const name = (bound as never as { params: unknown[] }).params?.[0] as string;
+              return { results: (store[name] ?? []).map((content) => ({ content })) };
+            }
+            if (isCount) return { results: [{ entities: 1, observations: 2 }] };
+            return { results: [] };
+          }),
+          bind: vi.fn((...params: unknown[]) => {
+            (bound as never as { params: unknown[] }).params = params;
+const boundStmt = {
+          run: vi.fn(async () => {
+            if (isInsert) {
+              const name = params[0] as string;
+              store[name] = store[name] ?? [];
+              store[name].push(params[1] as string);
+            }
+            return { meta: { changes: 1 } };
+          }),
+          all: vi.fn(async () => {
+            if (isEntitySelect) {
+              const name = params[0] as string;
+              return { results: store[name] ? [{ entity_type: 'project' }] : [] };
+            }
+            if (isObsSelect) {
+              const name = params[0] as string;
+              return { results: (store[name] ?? []).map((content) => ({ content })) };
+            }
+            if (isCount) return { results: [{ entities: 1, observations: 2 }] };
+            return { results: [] };
+          }),
+        };
+        return boundStmt;
+          }),
+        };
+        return bound;
+      }),
+      exec: vi.fn(async () => ({ success: true })),
+      batch: vi.fn(async () => []),
+    };
+
+    const mem = new D1MemoryStorage(db as never);
+    await mem.createEntity('payment-service', 'project');
+    await mem.addObservations('payment-service', ['uses EC2', 'cost $512']);
+
+    const node = await mem.openNode('payment-service');
+    expect(node?.entity_type).toBe('project');
+    expect(node?.observations).toContain('cost $512');
+
+    const stats = await mem.stats();
+    expect(stats).toEqual({ entities: 1, observations: 2 });
   });
 
   it('validateApiKey: dev key + KV hashed keys', async () => {

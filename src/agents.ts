@@ -10,10 +10,11 @@
 
 import { Agent, defineTool, type AgentConfig, type Tool } from '@carloscortezcloud/tinkuy-agent';
 import { StyrRouter } from '@carloscortezcloud/styrr-llm';
-import { SayayGuard, MemoryStorage } from '@carloscortezcloud/sayay-guard';
+import { SayayGuard, MemoryStorage as SayayMemoryStorage } from '@carloscortezcloud/sayay-guard';
 import type { TideRAG } from '@carloscortezcloud/tiderag';
 import { createFinopsAnalyst, FINOPS_ANALYST_PROMPT } from './agent.js';
 import { defaultModelList } from './providers.js';
+import { memoryTools, type MemoryStorage as FinoptixMemoryStorage } from './memory.js';
 
 export interface AgentTier {
   openrouterApiKey: string;
@@ -25,6 +26,8 @@ export interface AgentTier {
   /** optional TideRAG instance for context-aware agents */
   rag?: TideRAG;
   ragNamespace?: string;
+  /** optional memory storage (sqlite-memory-mcp contract) */
+  memory?: FinoptixMemoryStorage;
 }
 
 // ─── TideRAG context tool ────────────────────────────────────────────────
@@ -100,12 +103,12 @@ export function createAgent(kind: AgentKind, cfg: AgentTier) {
   });
 
   const guard = new SayayGuard({
-    storage: new MemoryStorage(),
+    storage: new SayayMemoryStorage(),
     budget: { dailyUsd: cfg.dailyBudgetUsd ?? 1.0 },
     onExceeded: 'warn',
   });
 
-  const tools: Tool[] = [makeSearchKnowledge(cfg.rag)];
+  const tools: Tool[] = [makeSearchKnowledge(cfg.rag), ...(cfg.memory ? memoryTools(cfg.memory) : [])];
 
   const config: AgentConfig = {
     router,
