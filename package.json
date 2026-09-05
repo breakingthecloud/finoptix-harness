@@ -10,7 +10,9 @@
     "test": "vitest run",
     "dev:worker": "wrangler dev",
     "deploy:worker": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "example:mcp": "node examples/mcp-client.mjs",
+    "example:rest": "node examples/rest-client.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1125.0",

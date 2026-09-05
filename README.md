@@ -6,6 +6,23 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 
 > Regla: **NADA se reimplementa del stack SSTTQ** (ya publicado en npm/PyPI). El único código de dominio nuevo = `src/classifier.ts` (complejidad FinOps L1-L6) y los agentes FinOps.
 
+## Live
+
+- **Gateway:** https://agents.finoptix.dev (MCP SSE + REST)
+- **Health:** https://agents.finoptix.dev/health
+- **Docs:** `docs/` (HARNESS.md, MCP.md)
+- **Ejemplos:** `examples/` (mcp-client.mjs, rest-client.mjs, finoptix.skill.md)
+
+## Docs & Examples
+
+| Path | Contenido |
+|---|---|
+| `docs/HARNESS.md` | Arquitectura del harness (fuente para ai.finoptix.dev/harness) |
+| `docs/MCP.md` | Cómo conectar el harness a tu IDE (Kiro/VS Code/Claude Code) |
+| `examples/mcp-client.mjs` | Cliente MCP sin SDK (initialize + tools/list + classify) |
+| `examples/rest-client.mjs` | Cliente REST (`/v1/finops/analyze`) |
+| `examples/finoptix.skill.md` | Skill reutilizable para agentes |
+
 ## Repos referenciados (no copiados)
 
 | Repo/paquete | Rol |
