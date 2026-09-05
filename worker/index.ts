@@ -17,18 +17,39 @@ import { createFinopsAnalyst, classify } from '../src/agent.js';
 import { createArchAuditor, createCostInvestigator } from '../src/agents.js';
 import { modelForLevel } from '../src/classifier.js';
 import { createObservability } from '../src/observability.js';
+import {
+  initSchema,
+  makeSpanStorage,
+  getStats,
+  writeRating,
+  validateApiKey,
+  issueApiKey,
+  sha256,
+  type D1Database,
+  type KVNamespace,
+} from './db.js';
 
-const app = new Hono<{ Bindings: { OPENROUTER_API_KEY: string } }>();
+type Env = {
+  OPENROUTER_API_KEY: string;
+  DB: D1Database;
+  API_KEYS: KVNamespace;
+  ENVIRONMENT?: string;
+};
+
+const app = new Hono<{ Bindings: Env }>();
 
 // NOTE: observability is created lazily per-request (QhawayTinkuyPlugin calls
 // crypto.randomUUID() in its constructor — not allowed in CF global scope).
-// In prod, use a Durable Object to keep per-session state.
-function makeObs() {
-  return createObservability({ agentName: 'finoptix-gateway' });
+// Spans persist to D1 (free tier) — NOT Durable Objects.
+function makeObs(db: D1Database) {
+  return createObservability({
+    agentName: 'finoptix-gateway',
+    backend: makeSpanStorage(db),
+  });
 }
 
-function makeAgent(kind: 'analyst' | 'auditor' | 'investigator', apiKey: string) {
-  const common = { openrouterApiKey: apiKey, obs: makeObs() };
+function makeAgent(kind: 'analyst' | 'auditor' | 'investigator', apiKey: string, db: D1Database) {
+  const common = { openrouterApiKey: apiKey, obs: makeObs(db) };
   switch (kind) {
     case 'auditor':
       return createArchAuditor(common);
@@ -113,22 +134,39 @@ function authError(): Response {
   );
 }
 
-function validateKey(key: string | null): boolean {
-  // Phase A: dev key. Phase B: KV lookup (fp_{env}_{hash})
-  return key === 'fp_dev_local' || (key ?? '').startsWith('fp_live_');
+// KV-backed validation (free tier). Dev key fp_dev_local for local testing.
+async function validateKey(kv: KVNamespace, key: string | null): Promise<boolean> {
+  return validateApiKey(kv, key);
+}
+
+function getKey(c: { req: { header: (n: string) => string | undefined; query: (n: string) => string | undefined } }): string | null {
+  return c.req.header('X-FinOptix-Key') || c.req.query('key') || null;
 }
 
 // ─── Health ──────────────────────────────────────────────────────────────
 
-app.get('/health', (c) =>
-  c.json({ service: 'finoptix-agent-gateway', version: '0.1.0', tools: TOOLS.length, status: 'ok' }),
-);
+app.get('/health', async (c) => {
+  try {
+    await initSchema(c.env.DB); // idempotent
+    const stats = await getStats(c.env.DB);
+    return c.json({
+      service: 'finoptix-agent-gateway',
+      version: '0.2.0',
+      tools: TOOLS.length,
+      storage: 'd1',
+      span_count: stats.span_count,
+      status: 'ok',
+    });
+  } catch (err) {
+    return c.json({ service: 'finoptix-agent-gateway', status: 'degraded', error: String(err) }, 500);
+  }
+});
 
 // ─── MCP SSE transport ───────────────────────────────────────────────────
 
-app.get('/sse', (c) => {
-  const key = c.req.header('X-FinOptix-Key') || c.req.query('key');
-  if (!validateKey(key)) return authError();
+app.get('/sse', async (c) => {
+  const key = getKey(c);
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
 
   return streamSSE(c, async (stream) => {
     // Spec: first event tells the client where to POST
@@ -152,8 +190,8 @@ app.get('/sse', (c) => {
 // ─── JSON-RPC ────────────────────────────────────────────────────────────
 
 app.post('/messages', async (c) => {
-  const key = c.req.header('X-FinOptix-Key') || c.req.query('key');
-  if (!validateKey(key)) return c.json({ jsonrpc: '2.0', error: { code: -32000, message: 'Missing/invalid API key' }, id: null });
+  const key = getKey(c);
+  if (!(await validateKey(c.env.API_KEYS, key))) return c.json({ jsonrpc: '2.0', error: { code: -32000, message: 'Missing/invalid API key' }, id: null });
 
   const body = await c.req.json<{ method: string; params?: any; id?: any }>();
   const { method, params, id } = body;
@@ -185,7 +223,7 @@ app.post('/messages', async (c) => {
         };
 
         if (agentMap[name]) {
-          const agent = makeAgent(agentMap[name], apiKey);
+          const agent = makeAgent(agentMap[name], apiKey, c.env.DB);
           const fullPrompt = args.context ? `${args.context}\n\n${args.prompt}` : args.prompt;
           const out = await agent.run(fullPrompt);
           result = {
@@ -227,11 +265,11 @@ app.post('/messages', async (c) => {
 // ─── REST direct (testing) ───────────────────────────────────────────────
 
 app.post('/v1/finops/analyze', async (c) => {
-  const key = c.req.header('X-FinOptix-Key') || c.req.header('authorization')?.replace('Bearer ', '');
-  if (!validateKey(key)) return authError();
+  const key = getKey(c) || c.req.header('authorization')?.replace('Bearer ', '') || null;
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
 
   const { prompt, context, mode } = await c.req.json<{ prompt: string; context?: string; mode?: string }>();
-  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY, obs: makeObs() });
+  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY, obs: makeObs(c.env.DB) });
   const fullPrompt = context ? `${context}\n\n${prompt}` : prompt;
   const out = await agent.run(fullPrompt);
   const cls = classify({ prompt, context: context ?? '', mode: mode as never });
@@ -247,11 +285,11 @@ app.post('/v1/finops/analyze', async (c) => {
   });
 });
 
-// ─── Feedback loop (Bloque 3) ───────────────────────────────────────────
+// ─── Feedback loop (Bloque 3) — persist to D1 ───────────────────────────
 
 app.post('/v1/finops/feedback', async (c) => {
-  const key = c.req.header('X-FinOptix-Key') || c.req.header('authorization')?.replace('Bearer ', '');
-  if (!validateKey(key)) return authError();
+  const key = getKey(c) || c.req.header('authorization')?.replace('Bearer ', '') || null;
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
 
   const { session_id, rating, message, user_id } = await c.req.json<{
     session_id: string;
@@ -262,21 +300,54 @@ app.post('/v1/finops/feedback', async (c) => {
   if (!session_id || ![1, -1, 0].includes(rating)) {
     return c.json({ error: 'session_id (string) and rating (1|-1|0) required' }, 400);
   }
-  await makeObs().rate(session_id, rating, message, user_id);
+  await writeRating(c.env.DB, {
+    id: `feedback-${session_id}-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    model: '',
+    provider: 'feedback',
+    latency_ms: 0,
+    tokens_in: 0,
+    tokens_out: 0,
+    cost_usd: 0,
+    session_id,
+    agent_id: 'finoptix-gateway',
+    user_id,
+    rating,
+    success: true,
+    metadata: { message },
+  });
   return c.json({ ok: true, session_id, rating });
 });
 
-// ─── Stats (feeds adaptive-classifier R1/R2) ────────────────────────────
+// ─── Stats (feeds adaptive-classifier R1/R2) — read from D1 ─────────────
 
-app.get('/v1/finops/stats', (c) => {
-  const key = c.req.header('X-FinOptix-Key') || c.req.query('key');
-  if (!validateKey(key)) return authError();
-  const obs = makeObs();
-  return c.json({
-    rating_stats: obs.stats(),
-    span_count: obs.allSpans().length,
-    rated_span_count: obs.ratedSpans().length,
-  });
+app.get('/v1/finops/stats', async (c) => {
+  const key = getKey(c);
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
+  const stats = await getStats(c.env.DB);
+  return c.json(stats);
+});
+
+// ─── API keys (KV, free tier) ───────────────────────────────────────────
+
+// Dev-only helper — in prod, gated by admin auth + tier. Issue an API key.
+app.post('/v1/keys', async (c) => {
+  const key = getKey(c) || c.req.header('authorization')?.replace('Bearer ', '') || null;
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
+  const { user_id } = await c.req.json<{ user_id: string }>();
+  if (!user_id) return c.json({ error: 'user_id required' }, 400);
+  const issued = await issueApiKey(c.env.API_KEYS, user_id);
+  return c.json({ ok: true, api_key: issued, hint: 'store once — shown only here' });
+});
+
+// Revoke an API key.
+app.post('/v1/keys/revoke', async (c) => {
+  const key = getKey(c) || c.req.header('authorization')?.replace('Bearer ', '') || null;
+  if (!(await validateKey(c.env.API_KEYS, key))) return authError();
+  const { api_key } = await c.req.json<{ api_key: string }>();
+  if (!api_key?.startsWith('fp_live_')) return c.json({ error: 'invalid api_key' }, 400);
+  await c.env.API_KEYS.delete(`key:${sha256(api_key)}`);
+  return c.json({ ok: true, revoked: api_key.slice(0, 12) + '…' });
 });
 
 export default app;

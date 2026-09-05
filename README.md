@@ -30,8 +30,20 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 - [x] `/v1/finops/feedback` + `/v1/finops/stats` (ratings → adaptive-classifier)
 - [x] `src/agents.ts` — multi-agente (Bloque 4): Arch Auditor + Cost Investigator + TideRAG `search_knowledge`
 - [x] Worker expone 4 tools MCP: `finops/analyze`, `finops/classify`, `architect/audit`, `investigate/cost`
+- [x] **Bloque 5 (storage free)**: D1 (spans Qhaway + feedback) + KV (API keys) — SIN Durable Objects
+- [x] `worker/db.ts` — persistencia D1 + KV (free tier), migración, stats, API keys issue/revoke
 - [x] `agent-config.yaml` — agent-config-spec v1
-- [x] Tests (25) + typecheck ✅
+- [x] Tests (30) + typecheck ✅
+
+## Storage: FREE tier (sin Durable Objects)
+
+| Almacenamiento | Free plan (diario) | Uso | Por qué no DO |
+|---|---|---|---|
+| **D1** (SQLite) | 5M rows read, 100K rows write, 5GB | Qhaway spans + feedback (`/v1/finops/stats`) | Scale-to-zero, gratis |
+| **KV** | 100K reads, 1K writes, 1GB | API keys (`fp_live_`) issue/revoke | Pocas writes, gratis |
+| ~~Durable Objects~~ | — | ~~session state~~ | **EVITAR**: DO SQLite se factura desde Ene 2026 + duración GB-s |
+
+Endpoints: `POST /v1/keys` (issue), `POST /v1/keys/revoke`, `POST /v1/finops/feedback` (→ D1), `GET /v1/finops/stats` (← D1).
 - [ ] **Pendiente:** storage durable de spans (D1/KV/DO) para stats entre requests — hoy stateless (cada request = instancia nueva)
 - [ ] **Pendiente:** deploy real a agents.finoptix.dev (secret OPENROUTER_API_KEY + KV API keys)
 
