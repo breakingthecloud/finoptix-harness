@@ -15,8 +15,16 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createFinopsAnalyst, classify } from '../src/agent.js';
 import { modelForLevel } from '../src/classifier.js';
+import { createObservability } from '../src/observability.js';
 
 const app = new Hono<{ Bindings: { OPENROUTER_API_KEY: string } }>();
+
+// NOTE: observability is created lazily per-request (QhawayTinkuyPlugin calls
+// crypto.randomUUID() in its constructor — not allowed in CF global scope).
+// In prod, use a Durable Object to keep per-session state.
+function makeObs() {
+  return createObservability({ agentName: 'finoptix-gateway' });
+}
 
 const TOOLS = [
   {
@@ -130,7 +138,7 @@ app.post('/messages', async (c) => {
       case 'tools/call': {
         const { name, arguments: args } = params ?? {};
         if (name === 'finops/analyze') {
-          const agent = createFinopsAnalyst({ openrouterApiKey: apiKey });
+          const agent = createFinopsAnalyst({ openrouterApiKey: apiKey, obs: makeObs() });
           const fullPrompt = args.context ? `${args.context}\n\n${args.prompt}` : args.prompt;
           const out = await agent.run(fullPrompt);
           result = {
@@ -175,7 +183,7 @@ app.post('/v1/finops/analyze', async (c) => {
   if (!validateKey(key)) return authError();
 
   const { prompt, context, mode } = await c.req.json<{ prompt: string; context?: string; mode?: string }>();
-  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY });
+  const agent = createFinopsAnalyst({ openrouterApiKey: c.env.OPENROUTER_API_KEY, obs: makeObs() });
   const fullPrompt = context ? `${context}\n\n${prompt}` : prompt;
   const out = await agent.run(fullPrompt);
   const cls = classify({ prompt, context: context ?? '', mode: mode as never });
@@ -188,6 +196,38 @@ app.post('/v1/finops/analyze', async (c) => {
       iterations: out.iterations,
       latency_ms: out.totalLatencyMs,
     },
+  });
+});
+
+// ─── Feedback loop (Bloque 3) ───────────────────────────────────────────
+
+app.post('/v1/finops/feedback', async (c) => {
+  const key = c.req.header('X-FinOptix-Key') || c.req.header('authorization')?.replace('Bearer ', '');
+  if (!validateKey(key)) return authError();
+
+  const { session_id, rating, message, user_id } = await c.req.json<{
+    session_id: string;
+    rating: 1 | -1 | 0;
+    message?: string;
+    user_id?: string;
+  }>();
+  if (!session_id || ![1, -1, 0].includes(rating)) {
+    return c.json({ error: 'session_id (string) and rating (1|-1|0) required' }, 400);
+  }
+  await makeObs().rate(session_id, rating, message, user_id);
+  return c.json({ ok: true, session_id, rating });
+});
+
+// ─── Stats (feeds adaptive-classifier R1/R2) ────────────────────────────
+
+app.get('/v1/finops/stats', (c) => {
+  const key = c.req.header('X-FinOptix-Key') || c.req.query('key');
+  if (!validateKey(key)) return authError();
+  const obs = makeObs();
+  return c.json({
+    rating_stats: obs.stats(),
+    span_count: obs.allSpans().length,
+    rated_span_count: obs.ratedSpans().length,
   });
 });
 

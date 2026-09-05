@@ -11,7 +11,7 @@
  * operation (graph_from_evaluation, blast_radius, cost_summary, remediation).
  */
 
-import { Agent, defineTool, type Tool } from '@carloscortezcloud/tinkuy-agent';
+import { Agent, defineTool, type Tool, type AgentConfig } from '@carloscortezcloud/tinkuy-agent';
 import { StyrRouter } from '@carloscortezcloud/styrr-llm';
 import { SayayGuard, MemoryStorage } from '@carloscortezcloud/sayay-guard';
 import { classify } from './classifier.js';
@@ -143,6 +143,10 @@ export interface FinopsAnalystConfig {
   awsProfile?: string;
   /** override system prompt for other agent types (auditor, investigator) */
   systemPrompt?: string;
+  /** optional observability (Qhaway tracing + feedback) */
+  obs?: {
+    attach: (config: AgentConfig) => AgentConfig;
+  };
 }
 
 const DEFAULT_MODELS = ['finoptix-14b', 'finoptix-7b', 'finemma-4b'];
@@ -186,23 +190,43 @@ export function createFinopsAnalyst(cfg: FinopsAnalystConfig) {
     },
   }));
 
-  return new Agent({
-    router,
-    guard,
-    userId: cfg.userId,
-    tools,
-    systemPrompt: cfg.systemPrompt ?? FINOPS_ANALYST_PROMPT,
-    maxIterations: 5,
-    onIteration: (e) => {
-      console.log(`  ⚡ iter ${e.iteration} | ${e.modelUsed} | ${e.latencyMs}ms${e.hasToolCalls ? ' 🔧' : ''}`);
-    },
-    onToolCall: (e) => {
-      console.log(`  🔧 ${e.tool}() → ${e.durationMs}ms${e.error ? ' ❌' : ' ✅'}`);
-    },
-    onComplete: (e) => {
-      console.log(`  🏁 ${e.iterations} iters | models: ${e.modelsUsed.join(', ')} | ${e.totalLatencyMs}ms`);
-    },
-  });
+  return new Agent(
+    cfg.obs
+      ? cfg.obs.attach({
+          router,
+          guard,
+          userId: cfg.userId,
+          tools,
+          systemPrompt: cfg.systemPrompt ?? FINOPS_ANALYST_PROMPT,
+          maxIterations: 5,
+          onIteration: (e) => {
+            console.log(`  ⚡ iter ${e.iteration} | ${e.modelUsed} | ${e.latencyMs}ms${e.hasToolCalls ? ' 🔧' : ''}`);
+          },
+          onToolCall: (e) => {
+            console.log(`  🔧 ${e.tool}() → ${e.durationMs}ms${e.error ? ' ❌' : ' ✅'}`);
+          },
+          onComplete: (e) => {
+            console.log(`  🏁 ${e.iterations} iters | models: ${e.modelsUsed.join(', ')} | ${e.totalLatencyMs}ms`);
+          },
+        })
+      : {
+          router,
+          guard,
+          userId: cfg.userId,
+          tools,
+          systemPrompt: cfg.systemPrompt ?? FINOPS_ANALYST_PROMPT,
+          maxIterations: 5,
+          onIteration: (e) => {
+            console.log(`  ⚡ iter ${e.iteration} | ${e.modelUsed} | ${e.latencyMs}ms${e.hasToolCalls ? ' 🔧' : ''}`);
+          },
+          onToolCall: (e) => {
+            console.log(`  🔧 ${e.tool}() → ${e.durationMs}ms${e.error ? ' ❌' : ' ✅'}`);
+          },
+          onComplete: (e) => {
+            console.log(`  🏁 ${e.iterations} iters | models: ${e.modelsUsed.join(', ')} | ${e.totalLatencyMs}ms`);
+          },
+        },
+  );
 }
 
 // Re-export classify so the worker can expose complexity in metadata

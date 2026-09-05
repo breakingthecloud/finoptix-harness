@@ -20,14 +20,18 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 | HF `ccortezb/FinOptix-14B` | Modelo base (provider en Styrr) |
 | `finoptix-landing` | ai.finoptix.dev (LIVE) |
 
-## Estado — Bloque 1 (Router Phase A) 🟡
+## Estado — Bloques
 
 - [x] `src/classifier.ts` — classifier FinOps L1-L6 (único código propio)
 - [x] `src/steering.ts` — glue Classifier + Styrr + Sayay + Qhaway
+- [x] `src/agent.ts` — FinOps Analyst (Tinkuy) + tools (cost_summary, blast_radius, remediation)
+- [x] `worker/index.ts` — Agent Gateway MCP SSE (`agents.finoptix.dev/mcp`) + REST `/v1/finops/analyze`
+- [x] `src/observability.ts` — Qhaway tracing + feedback loop (Bloque 3)
+- [x] `/v1/finops/feedback` + `/v1/finops/stats` (ratings → adaptive-classifier)
 - [x] `agent-config.yaml` — agent-config-spec v1
-- [x] Tests classifier (`vitest`)
-- [ ] Agents Tinkuy (analyst 1x) → Bloque 2
-- [ ] Worker `agents.finoptix.dev/mcp` → Bloque 2
+- [x] Tests (20) + typecheck ✅
+- [ ] **Pendiente:** storage durable de spans (D1/KV/DO) para stats entre requests — hoy stateless (cada request = instancia nueva)
+- [ ] **Pendiente:** deploy real a agents.finoptix.dev (secret OPENROUTER_API_KEY + KV API keys)
 
 ## CLI
 
@@ -35,9 +39,28 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 # Clasificar una query (sin API key)
 npm run classify -- "Audit my terraform" 'resource "aws_instance" "web" {}'
 
-# Tests del classifier
+# Tests
 npm test
+
+# Worker local (MCP SSE)
+npm run dev:worker
+# → curl -X POST "http://localhost:8787/messages?key=fp_dev_local" \
+#     -H 'content-type: application/json' \
+#     -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"finops/classify","arguments":{"prompt":"Compare costs"}},"id":1}'
 ```
+
+## API del gateway
+
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/health` | GET | status + tools count |
+| `/sse` | GET | MCP SSE transport (spec: evento `endpoint`) |
+| `/messages` | POST | JSON-RPC MCP (`initialize`, `tools/list`, `tools/call`) |
+| `/v1/finops/analyze` | POST | REST directo (agente completo) |
+| `/v1/finops/feedback` | POST | rating 👍/👎 → span Qhaway |
+| `/v1/finops/stats` | GET | ratingStats (alimenta adaptive-classifier) |
+
+Auth: header `X-FinOptix-Key` o `?key=`. Dev: `fp_dev_local`.
 
 ## Roadmap del repo
 
