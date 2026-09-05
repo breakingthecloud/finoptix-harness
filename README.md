@@ -28,8 +28,10 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 - [x] `worker/index.ts` — Agent Gateway MCP SSE (`agents.finoptix.dev/mcp`) + REST `/v1/finops/analyze`
 - [x] `src/observability.ts` — Qhaway tracing + feedback loop (Bloque 3)
 - [x] `/v1/finops/feedback` + `/v1/finops/stats` (ratings → adaptive-classifier)
+- [x] `src/agents.ts` — multi-agente (Bloque 4): Arch Auditor + Cost Investigator + TideRAG `search_knowledge`
+- [x] Worker expone 4 tools MCP: `finops/analyze`, `finops/classify`, `architect/audit`, `investigate/cost`
 - [x] `agent-config.yaml` — agent-config-spec v1
-- [x] Tests (20) + typecheck ✅
+- [x] Tests (25) + typecheck ✅
 - [ ] **Pendiente:** storage durable de spans (D1/KV/DO) para stats entre requests — hoy stateless (cada request = instancia nueva)
 - [ ] **Pendiente:** deploy real a agents.finoptix.dev (secret OPENROUTER_API_KEY + KV API keys)
 
@@ -59,6 +61,15 @@ npm run dev:worker
 | `/v1/finops/analyze` | POST | REST directo (agente completo) |
 | `/v1/finops/feedback` | POST | rating 👍/👎 → span Qhaway |
 | `/v1/finops/stats` | GET | ratingStats (alimenta adaptive-classifier) |
+
+## MCP tools (tools/list)
+
+| Tool | Agent | Uso |
+|---|---|---|
+| `finops/analyze` | FinOps Analyst | Costos, savings, análisis general |
+| `finops/classify` | — | Complejidad L1-L6 (sin LLM) |
+| `architect/audit` | Architecture Auditor | Governance, compliance, Well-Architected |
+| `investigate/cost` | Cost Investigator | Root cause de spikes/anomalías |
 
 Auth: header `X-FinOptix-Key` o `?key=`. Dev: `fp_dev_local`.
 

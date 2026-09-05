@@ -14,6 +14,7 @@
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createFinopsAnalyst, classify } from '../src/agent.js';
+import { createArchAuditor, createCostInvestigator } from '../src/agents.js';
 import { modelForLevel } from '../src/classifier.js';
 import { createObservability } from '../src/observability.js';
 
@@ -24,6 +25,18 @@ const app = new Hono<{ Bindings: { OPENROUTER_API_KEY: string } }>();
 // In prod, use a Durable Object to keep per-session state.
 function makeObs() {
   return createObservability({ agentName: 'finoptix-gateway' });
+}
+
+function makeAgent(kind: 'analyst' | 'auditor' | 'investigator', apiKey: string) {
+  const common = { openrouterApiKey: apiKey, obs: makeObs() };
+  switch (kind) {
+    case 'auditor':
+      return createArchAuditor(common);
+    case 'investigator':
+      return createCostInvestigator(common);
+    default:
+      return createFinopsAnalyst(common);
+  }
 }
 
 const TOOLS = [
@@ -50,6 +63,32 @@ const TOOLS = [
         prompt: { type: 'string' },
         context: { type: 'string' },
         mode: { type: 'string', enum: ['terraform', 'cost', 'byaml', 'qa', 'report', 'general'] },
+      },
+      required: ['prompt'],
+    },
+  },
+  {
+    name: 'architect/audit',
+    description:
+      'Run the Architecture Auditor agent: audits infrastructure (terraform, BYaML) for governance, compliance, and Well-Architected best practices. Reports findings by severity with fixes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Architecture to audit or question' },
+        context: { type: 'string', description: 'Terraform / BYaML content' },
+      },
+      required: ['prompt'],
+    },
+  },
+  {
+    name: 'investigate/cost',
+    description:
+      'Run the Cost Investigator agent: finds root causes of cost spikes/anomalies, correlates with architecture, recommends remediation with USD impact.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt: { type: 'string', description: 'Anomaly to investigate' },
+        context: { type: 'string', description: 'Cost JSON or context' },
       },
       required: ['prompt'],
     },
@@ -137,14 +176,23 @@ app.post('/messages', async (c) => {
 
       case 'tools/call': {
         const { name, arguments: args } = params ?? {};
-        if (name === 'finops/analyze') {
-          const agent = createFinopsAnalyst({ openrouterApiKey: apiKey, obs: makeObs() });
+
+        // map MCP tool name → agent kind
+        const agentMap: Record<string, 'analyst' | 'auditor' | 'investigator'> = {
+          'finops/analyze': 'analyst',
+          'architect/audit': 'auditor',
+          'investigate/cost': 'investigator',
+        };
+
+        if (agentMap[name]) {
+          const agent = makeAgent(agentMap[name], apiKey);
           const fullPrompt = args.context ? `${args.context}\n\n${args.prompt}` : args.prompt;
           const out = await agent.run(fullPrompt);
           result = {
             content: [{ type: 'text', text: out.text }],
             metadata: {
               complexity: classify({ prompt: args.prompt, context: args.context ?? '', mode: args.mode }).level,
+              agent: agentMap[name],
               model_used: out.modelsUsed.join(', '),
               iterations: out.iterations,
               tools_used: out.toolsUsed,
