@@ -13,7 +13,7 @@ import { StyrRouter } from '@carloscortezcloud/styrr-llm';
 import { SayayGuard, MemoryStorage } from '@carloscortezcloud/sayay-guard';
 import type { TideRAG } from '@carloscortezcloud/tiderag';
 import { createFinopsAnalyst, FINOPS_ANALYST_PROMPT } from './agent.js';
-import { modelForLevel } from './classifier.js';
+import { defaultModelList } from './providers.js';
 
 export interface AgentTier {
   openrouterApiKey: string;
@@ -85,17 +85,17 @@ const PROMPTS: Record<AgentKind, string> = {
   investigator: INVESTIGATOR_PROMPT,
 };
 
-/** model default per agent kind (maps to FinOptix family via classifier) */
-const DEFAULT_MODEL: Record<AgentKind, string> = {
-  analyst: modelForLevel('L2'),
-  auditor: modelForLevel('L3'),
-  investigator: modelForLevel('L3'),
+/** default model list per agent kind (servable providers) */
+const DEFAULT_MODEL = {
+  analyst: defaultModelList(),
+  auditor: defaultModelList(),
+  investigator: defaultModelList(),
 };
 
 export function createAgent(kind: AgentKind, cfg: AgentTier) {
   const router = new StyrRouter({
     apiKey: cfg.openrouterApiKey,
-    models: (cfg.modelRegistry ?? [DEFAULT_MODEL[kind]]).map((id) => ({ id })),
+    models: (cfg.modelRegistry ?? DEFAULT_MODEL[kind]).map((id) => ({ id })),
     strategy: 'fallback',
   });
 

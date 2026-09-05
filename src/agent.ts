@@ -15,6 +15,7 @@ import { Agent, defineTool, type Tool, type AgentConfig } from '@carloscortezclo
 import { StyrRouter } from '@carloscortezcloud/styrr-llm';
 import { SayayGuard, MemoryStorage } from '@carloscortezcloud/sayay-guard';
 import { classify } from './classifier.js';
+import { defaultModelList } from './providers.js';
 
 // ─── Tool: Cost summary ──────────────────────────────────────────────────
 
@@ -149,7 +150,7 @@ export interface FinopsAnalystConfig {
   };
 }
 
-const DEFAULT_MODELS = ['finoptix-14b', 'finoptix-7b', 'finemma-4b'];
+const DEFAULT_MODELS = defaultModelList();
 
 export const FINOPS_ANALYST_PROMPT = `You are FinOptix Analyst, a FinOps specialist agent.
 You analyze cloud costs, find savings, and generate remediation plans.

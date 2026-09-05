@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { classify, modelForLevel, isEnterpriseOnly } from '../src/classifier.js';
+import { resolveModel, modelForLevelServable, defaultModelList } from '../src/providers.js';
 
 const CONTEXT_MULTI_RES = [
   'resource "aws_instance" "a" {}',
@@ -66,5 +67,28 @@ describe('FinOptix Classifier L1-L6', () => {
     expect(r.promptHash).toMatch(/^[0-9a-f]{8}$/);
     expect(r.promptTokens).toBeGreaterThan(0);
     expect(r.signals.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Provider registry (logical family → servable model)', () => {
+  it('resolves logical names to OpenRouter ids', () => {
+    expect(resolveModel('finoptix-14b')).toMatch(/^(qwen|meta)/);
+    expect(resolveModel('finoptix-7b')).not.toBe('finoptix-7b');
+    expect(resolveModel('finemma-4b')).toContain('gemma');
+  });
+
+  it('unknown family passes through unchanged', () => {
+    expect(resolveModel('custom-model')).toBe('custom-model');
+  });
+
+  it('modelForLevelServable maps L1-L3 to valid providers', () => {
+    expect(modelForLevelServable('L1')).toContain('gemma');
+    expect(modelForLevelServable('L3', 'terraform')).toContain('coder');
+  });
+
+  it('defaultModelList returns servable models only', () => {
+    const list = defaultModelList();
+    expect(list.length).toBe(3);
+    expect(list.every((m) => m.includes('/'))).toBe(true); // provider/name format
   });
 });

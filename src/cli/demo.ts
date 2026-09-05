@@ -10,13 +10,14 @@
  *   npm run demo -- "Why did my bill spike?"
  */
 import { createHarness } from '../steering.js';
+import { defaultModelList } from '../providers.js';
 
 const apiKey = process.env.OPENROUTER_API_KEY;
 const prompt = process.argv[2] || 'What are my top AWS costs this month?';
 
 const harness = createHarness({
   openrouterApiKey: apiKey || 'sk-or-missing',
-  modelRegistry: ['finoptix-14b', 'finoptix-7b', 'finemma-4b'], // FinOptix family providers
+  modelRegistry: defaultModelList(), // servable providers (OpenRouter)
   budgetUsd: { free: 0.5, pro: 2.0, enterprise: 999999 },
   agentName: 'finoptix-demo',
 });

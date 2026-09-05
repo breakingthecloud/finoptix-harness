@@ -18,6 +18,7 @@ import {
   type ComplexityLevel,
   type ClassifierFeatures,
 } from './classifier.js';
+import { resolveModel, defaultModelList } from './providers.js';
 
 export interface SteerRequest extends ClassifierFeatures {
   userId: string;
@@ -50,9 +51,11 @@ export interface HarnessConfig {
 }
 
 export function createHarness(config: HarnessConfig) {
+  // resolve logical family names to servable provider models
+  const registry = (config.modelRegistry ?? defaultModelList()).map((id) => ({ id: resolveModel(id) }));
   const styrr = new StyrRouter({
     apiKey: config.openrouterApiKey,
-    models: config.modelRegistry.map((id) => ({ id })),
+    models: registry,
     strategy: 'fallback',
   });
 
@@ -114,7 +117,7 @@ export function createHarness(config: HarnessConfig) {
     }
 
     // ── 3. Styrr routing (model chosen by classifier; degrade suggestion from Sayay)
-    const preferred = modelForLevel(cls.level, req.mode);
+    const preferred = resolveModel(modelForLevel(cls.level, req.mode));
     const modelId =
       decision.action === 'degrade' && decision.suggestedModel
         ? decision.suggestedModel
