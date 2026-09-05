@@ -72,8 +72,8 @@ describe('FinOptix Classifier L1-L6', () => {
 
 describe('Provider registry (logical family → servable model)', () => {
   it('resolves logical names to OpenRouter ids', () => {
-    expect(resolveModel('finoptix-14b')).toMatch(/^(qwen|meta)/);
-    expect(resolveModel('finoptix-7b')).not.toBe('finoptix-7b');
+    expect(resolveModel('finoptix-14b')).toBe('qwen/qwen3-14b');
+    expect(resolveModel('finoptix-7b')).toContain('gemma');
     expect(resolveModel('finemma-4b')).toContain('gemma');
   });
 

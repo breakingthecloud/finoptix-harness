@@ -21,13 +21,13 @@ export interface ProviderEntry {
   usdPer1k: number;
 }
 
-// Family → real servable model (OpenRouter free tier for now)
+// Family → real servable model (verified against OpenRouter /api/v1/models 2026-09)
 export const PROVIDER_REGISTRY: Record<string, ProviderEntry> = {
-  'finemma-4b': { family: 'finemma-4b', providerModel: 'google/gemma-2-9b-it:free', host: 'openrouter', usdPer1k: 0.0001 },
-  'finoptix-7b': { family: 'finoptix-7b', providerModel: 'qwen/qwen2.5-7b-instruct', host: 'openrouter', usdPer1k: 0.0003 },
-  'finocode-7b': { family: 'finocode-7b', providerModel: 'qwen/qwen3-coder:free', host: 'openrouter', usdPer1k: 0.0003 },
-  'finoptix-14b': { family: 'finoptix-14b', providerModel: 'qwen/qwen3-14b:free', host: 'openrouter', usdPer1k: 0.0006 },
-  'finoptix-32b': { family: 'finoptix-32b', providerModel: 'qwen/qwen2.5-32b-instruct', host: 'openrouter', usdPer1k: 0.002 },
+  'finemma-4b': { family: 'finemma-4b', providerModel: 'google/gemma-3-4b-it', host: 'openrouter', usdPer1k: 0.0001 },
+  'finoptix-7b': { family: 'finoptix-7b', providerModel: 'google/gemma-3-12b-it', host: 'openrouter', usdPer1k: 0.0003 },
+  'finocode-7b': { family: 'finocode-7b', providerModel: 'qwen/qwen3-coder', host: 'openrouter', usdPer1k: 0.0003 },
+  'finoptix-14b': { family: 'finoptix-14b', providerModel: 'qwen/qwen3-14b', host: 'openrouter', usdPer1k: 0.0006 },
+  'finoptix-32b': { family: 'finoptix-32b', providerModel: 'google/gemma-3-27b-it', host: 'openrouter', usdPer1k: 0.002 },
   'finomotrix-49b': { family: 'finomotrix-49b', providerModel: 'meta-llama/llama-3.3-70b-instruct', host: 'openrouter', usdPer1k: 0.004 },
 };
 
