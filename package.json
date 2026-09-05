@@ -12,7 +12,8 @@
     "deploy:worker": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "example:mcp": "node examples/mcp-client.mjs",
-    "example:rest": "node examples/rest-client.mjs"
+    "example:rest": "node examples/rest-client.mjs",
+    "setup": "bash scripts/setup.sh"
   },
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1125.0",

@@ -19,7 +19,22 @@ cd finoptix-harness
 npm install
 ```
 
-## 3. Create storage (D1 + KV)
+## 3. Quickstart (automated) — RECOMMENDED
+
+```bash
+# Everything: login check → D1 → KV → wrangler.toml → secret → deploy → verify
+npm run setup
+
+# With custom domain (zone on your Cloudflare):
+npm run setup -- --domain agents.yourdomain.com
+
+# Custom worker name:
+npm run setup -- --name my-finops
+```
+
+The script creates D1 + KV, writes `wrangler.toml`, prompts for the OpenRouter key, deploys, and verifies `/health`. ~5 minutes total.
+
+## 3b. Manual path (alternative)
 
 ```bash
 # D1 database

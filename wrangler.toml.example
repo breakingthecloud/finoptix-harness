@@ -1,0 +1,27 @@
+name = "finoptix-agent-gateway"
+# Fill with your account id (npx wrangler whoami)
+account_id = "YOUR_ACCOUNT_ID"
+main = "worker/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+ENVIRONMENT = "dev"
+
+# Created by: npx wrangler kv namespace create API_KEYS
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "YOUR_KV_ID"
+preview_id = ""
+
+# Created by: npx wrangler d1 create finoptix-harness
+[[d1_databases]]
+binding = "DB"
+database_name = "finoptix-harness"
+database_id = "YOUR_D1_ID"
+
+# Optional: custom domain (requires the zone on your Cloudflare account)
+# [[routes]]
+# pattern = "agents.yourdomain.com"
+# custom_domain = true

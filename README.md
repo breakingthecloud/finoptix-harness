@@ -8,10 +8,21 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 
 ## Live
 
-- **Gateway:** https://agents.finoptix.dev (MCP SSE + REST)
+- **Gateway:** https://agents.finoptix.dev (MCP SSE + REST) — reference deployment
 - **Health:** https://agents.finoptix.dev/health
 - **Docs:** `docs/` (HARNESS.md, MCP.md)
 - **Ejemplos:** `examples/` (mcp-client.mjs, rest-client.mjs, finoptix.skill.md)
+
+## Quickstart (deploy your own instance)
+
+```bash
+git clone https://github.com/breakingthecloud/finoptix-harness
+cd finoptix-harness
+npm install
+npm run setup        # → D1 + KV + wrangler.toml + secret + deploy + verify
+```
+
+Full guide: `guides/SELF-HOSTED.md`. Free tier, single-tenant, ~5 min.
 
 ## Docs & Examples
 
