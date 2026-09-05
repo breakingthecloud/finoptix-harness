@@ -20,6 +20,7 @@ No es un modelo. Es el **harness**: clasificador L1-L6 + routing (Styrr) + budge
 | `docs/HARNESS.md` | Arquitectura del harness (fuente para ai.finoptix.dev/harness) |
 | `docs/MCP.md` | Cómo conectar el harness a tu IDE (Kiro/VS Code/Claude Code) |
 | `guides/TESTING.md` | Guía de testing (unit → classify → MCP → agente → IDE) |
+| `guides/SELF-HOSTED.md` | **Deploy tu propio harness** (D1 + KV + secret → tu Cloudflare, single-tenant) |
 | `examples/mcp-client.mjs` | Cliente MCP sin SDK (initialize + tools/list + classify) |
 | `examples/rest-client.mjs` | Cliente REST (`/v1/finops/analyze`) |
 | `examples/finoptix.skill.md` | Skill reutilizable para agentes |

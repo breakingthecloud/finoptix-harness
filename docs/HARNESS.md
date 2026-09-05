@@ -48,6 +48,31 @@ The **only domain-specific code** in the harness. Routes by complexity:
 | L5 Enterprise | "Compare 5 accounts + migration" | finomotrix-49b |
 | L6 Hybrid | L5 with budget constraints (any tier) | chained inference |
 
+## Deployment model (open source)
+
+`agents.finoptix.dev` is the **reference deployment** (personal use). The harness is **free OSS** — anyone can deploy their own instance:
+
+- **Local:** run the agent + MCP + memory locally (free, offline)
+- **Cloud (self-hosted):** `wrangler deploy` to your own Cloudflare account (D1 + KV free tier) — for teams that want shared access
+- **No API key billing** — monetization comes later, only when the fine-tuned FinOptix models are deployed
+- `agents.finoptix.dev` stays as the reference/personal instance, not a multi-tenant paid cloud
+
+### Self-host in ~10 min
+
+```bash
+git clone https://github.com/breakingthecloud/finoptix-harness
+cd finoptix-harness
+npm install
+wrangler d1 create finoptix-harness   # copy database_id
+wrangler kv namespace create API_KEYS # copy id
+# edit wrangler.toml with your IDs
+wrangler secret put OPENROUTER_API_KEY
+wrangler deploy
+# → your-account.workers.dev + optional custom domain
+```
+
+Each deployment is **single-tenant** (its own D1/KV) — no cross-tenant data mixing, no multi-tenant complexity.
+
 ## Memory (Memory Has Tiers)
 
 The harness embeds the [sqlite-memory-mcp](https://github.com/breakingthecloud/sqlite-memory-mcp) contract (same 14-tool API, same schema) as **native agent tools** — so the agent can *remember*, *search*, and *recall* knowledge across sessions, live with the harness.
